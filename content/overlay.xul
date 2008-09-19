@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<overlay id="pubmedos-overlay" xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+
+  <script type="text/javascript">
+<![CDATA[
+
+window.document.addEventListener(
+    "DOMContentLoaded",
+    function(event) {
+        if (event.originalTarget instanceof HTMLDocument) {
+            var doc = event.originalTarget;
+            if ( (doc.location.href.search('http://www.ncbi.nlm.nih.gov/') > -1) && (doc.title.match(/pubmed/i)) ) {
+
+                // include stylesheets
+                var sss = Components.classes["@mozilla.org/content/style-sheet-service;1"]
+                          .getService(Components.interfaces.nsIStyleSheetService);
+                var ios = Components.classes["@mozilla.org/network/io-service;1"]
+                          .getService(Components.interfaces.nsIIOService);
+                var uri = ios.newURI("chrome://pubmedos/skin/pubmedos.css", null, null);
+                sss.loadAndRegisterSheet(uri, sss.USER_SHEET);
+
+                // include javascripts
+                var loader = Components.classes["@mozilla.org/moz/jssubscript-loader;1"]
+                             .getService(Components.interfaces.mozIJSSubScriptLoader);
+                loader.loadSubScript("chrome://pubmedos/content/sha1.js");
+                loader.loadSubScript("chrome://pubmedos/content/jquery.js");
+                loader.loadSubScript("chrome://pubmedos/content/pubmedos.js");
+
+                // run pubmedos
+                pubmedos(doc);
+            }
+        }
+    }, true
+);
+
+
+]]>
+  </script>
+
+</overlay>

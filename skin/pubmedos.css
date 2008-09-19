@@ -1,0 +1,59 @@
+#myncbi_on:hover, span.rating:hover, span.file:hover, span.favorite:hover, span.read:hover, span.work:hover, span.reprint:hover, #annotation:hover, #select_folders:hover { cursor: pointer !important; }
+
+img.rating, { vertical-align: top !important; }
+
+div.annotation {
+  margin: 0 !important;
+  padding: 5px !important;
+  background: #ffff99 !important;
+  border: 1px solid #cccccc !important;
+  font-size: 90% !important;
+}
+
+#folders > h2 {
+  margin-bottom: 0 !important;
+}
+
+#select_folders {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 90% !important;
+}
+
+div.editor_help {
+  margin: 0 !important;
+  margin-bottom: 10px !important;
+  padding: 0 !important;
+  font-size: 85% !important;
+  color: #666 !important; }
+
+#folders_list {
+  margin: 0 !important;
+  padding: 0 !important;
+ }
+
+#annotation_form {
+  width: 100% !important;
+  height: 20em !important;
+}
+
+#edit_annotation {
+  width: 95% !important;
+  height: 18.5em !important;
+  margin-bottom: .5em !important;
+}
+
+#folders_list { margin-top: 10px !important; }
+#folders_list li { list-style-type: none !important; }
+
+#folders h2, #discussions h2 {
+  background: #fff !important;
+  color: #333 !important;
+  margin-top: 18px !important;
+  padding: 0 0 6px 0 !important;
+  border-width: 0px !important;
+}
+
+#add_related_article { margin-left: 16px !important; }
+
+span.folder_cmds > img:hover { cursor: pointer !important; }

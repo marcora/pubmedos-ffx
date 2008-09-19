@@ -1,0 +1,6 @@
+content pubmedos        content/ contentaccessible=yes
+locale  pubmedos        en-US        locale/en-US/
+skin    pubmedos        default      skin/
+
+overlay chrome://browser/content/browser.xul    chrome://pubmedos/content/overlay.xul
+

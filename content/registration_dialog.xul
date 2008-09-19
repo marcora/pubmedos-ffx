@@ -1,0 +1,88 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://global/skin/global.css" type="text/css"?>
+<?xml-stylesheet href="chrome://pubmedos/skin/dialog.css" type="text/css"?>
+<dialog xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+        id="registration_dialog"
+        title="Register for PubMed On Steroids"
+        buttons="accept,cancel"
+        buttonlabelcancel="Cancel"
+        buttonlabelaccept="Submit"
+        onload="on_load();"
+        ondialogaccept="return on_dialog_accept();">
+  <script type="application/x-javascript" src="chrome://pubmedos/content/jquery.js" />
+  <script type="application/x-javascript" src="chrome://pubmedos/content/registration_dialog.js" />
+
+  <description value="Please, fill in this form to join PubMed On Steroids! Required fields are marked in bold." />
+
+  <grid flex="1">
+    <columns>
+      <column />
+      <column flex="1" />
+    </columns>
+    <rows>
+      <row>
+        <label value="Username" class="required" />
+        <textbox id="username_input" disabled="true" />
+      </row>
+      <row>
+        <label value="Password" class="required" />
+        <textbox id="password_input" type="password" maxlength="30" />
+      </row>
+      <row>
+        <label value="Password (confirm)" class="required" />
+        <textbox id="password_confirm_input" type="password" maxlength="30" />
+      </row>
+      <row>
+        <label value="Email"  class="required" />
+        <textbox id="email_input" />
+      </row>
+      <row>
+        <label value="Email (confirm)"  class="required"/>
+        <textbox id="email_confirm_input" />
+      </row>
+      <row>
+        <label value="Salutation" />
+        <menulist id="salutation_input">
+          <menupopup>
+            <menuitem label="" selected="true" />
+            <menuitem label="Mr" />
+            <menuitem label="Ms" />
+            <menuitem label="Dr" />
+            <menuitem label="Prof" />
+          </menupopup>
+        </menulist>
+      </row>
+      <row>
+        <label value="Last Name" class="required" />
+        <textbox id="last_name_input" />
+      </row>
+      <row>
+        <label value="First Name" class="required" />
+        <textbox id="first_name_input" />
+      </row>
+      <row>
+        <label value="Middle Name" />
+        <textbox id="middle_name_input" />
+      </row>
+      <row>
+        <label value="Suffix" />
+        <menulist id="suffix_input">
+          <menupopup>
+            <menuitem label="" selected="true" />
+            <menuitem label="Jr" />
+            <menuitem label="Sr" />
+            <menuitem label="2nd" />
+            <menuitem label="3rd" />
+            <menuitem label="4th" />
+            <menuitem label="5th" />
+          </menupopup>
+        </menulist>
+      </row>
+      <row>
+        <label value="Affiliation" />
+        <textbox id="affiliation_input" />
+      </row>
+      <label value="By submitting your registration, you agree to the terms of service and privacy policy posted at &gt;http://www.pubmedos.org/terms&lt;." />
+    </rows>
+  </grid>
+</dialog>
