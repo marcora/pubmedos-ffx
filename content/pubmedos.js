@@ -4,15 +4,21 @@ function pubmedos(doc) {
     var win = doc.defaultView; // window object associated with incoming document
     var wrp = new XPCNativeWrapper(win);
     const MYNCBI_CU = unescape(wrp.wrappedJSObject.myncbi_cu);
-    const OS_URL = 'http://pubmedos.appspot.com'; //'http://huntington.caltech.edu';
-    const PM_URL = 'http://'+doc.location.host;
-    const PG_URL = doc.location.href;
+    const BASE_URL = 'http://pubmedos.appspot.com'; //'http://huntington.caltech.edu';
+    const SBASE_URL = 'https://pubmedos.appspot.com'; //'http://huntington.caltech.edu';
+    const PUBMED_URL = 'http://'+doc.location.host;
+    const PAGE_URL = doc.location.href;
     const REALM = 'pubmedos';
 
-    // url helper
+    // url helpers
     function url_for() {
         arguments.join = Array.prototype.join;
-        return OS_URL + '/' + arguments.join('/');
+        return BASE_URL + '/' + arguments.join('/');
+    }
+
+    function surl_for() {
+        arguments.join = Array.prototype.join;
+        return SBASE_URL + '/' + arguments.join('/');
     }
 
     // init images
@@ -216,9 +222,6 @@ function pubmedos(doc) {
     }
 
 
-    //globalStorage[OS_URL].username = USERNAME;
-    //alert(globalStorage[OS_URL].username);
-
     /* encryption/decryption */
 
     function unique(a) { // eliminate duplicates in array while preserving order
@@ -274,7 +277,7 @@ function pubmedos(doc) {
 
     function find_login(username){
         var login_manager = Components.classes["@mozilla.org/login-manager;1"].getService(Components.interfaces.nsILoginManager);
-        var logins = login_manager.findLogins({}, OS_URL, null, REALM);
+        var logins = login_manager.findLogins({}, BASE_URL, null, REALM);
         var login = null;
         for (var i = 0; i < logins.length; i++) {
                 if (logins[i].username == username) {
@@ -296,7 +299,7 @@ function pubmedos(doc) {
             // password is stored as a base64-sha1 hash
             var password_hash = b64_sha1(password);
             var encrypted_password_hash = encrypt_password_hash(password_hash, username);
-            var login_info = new ns_login_info(OS_URL, null, REALM, username, encrypted_password_hash, '', '');
+            var login_info = new ns_login_info(BASE_URL, null, REALM, username, encrypted_password_hash, '', '');
             var login_manager = Components.classes["@mozilla.org/login-manager;1"].getService(Components.interfaces.nsILoginManager);
             login_manager.addLogin(login_info);
             return true;
@@ -310,7 +313,7 @@ function pubmedos(doc) {
                 Components.interfaces.nsILoginInfo,
                 "init");
             var encrypted_password_hash = encrypt_password_hash(password_hash, username);
-            var login_info = new ns_login_info(OS_URL, null, REALM, username, encrypted_password_hash, '', '');
+            var login_info = new ns_login_info(BASE_URL, null, REALM, username, encrypted_password_hash, '', '');
             var login_manager = Components.classes["@mozilla.org/login-manager;1"].getService(Components.interfaces.nsILoginManager);
             login_manager.removeLogin(login_info);
             return true;
@@ -341,32 +344,6 @@ function pubmedos(doc) {
         }
     }
 
-    // authentication (using wsse password digest <http://www.xml.com/pub/a/2003/12/17/dive.html>)
-    // ensure b64pad is set to "=" in sha1.js for strict RFC compliance
-    function generate_nonce(length) {
-        var nonce_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        var nonce = "";
-        for (i=0;i<length;i++) {
-            nonce += nonce_chars.charAt(Math.floor(Math.random() * nonce_chars.length));
-        }
-        return nonce;
-    }
-
-    function generate_created(date) {
-        var yyyy = date.getUTCFullYear();
-        var mm = (date.getUTCMonth() + 1);
-        if (mm < 10) mm = "0" + mm;
-        var dd = (date.getUTCDate());
-        if (dd < 10) dd = "0" + dd;
-        var hh = (date.getUTCHours());
-        if (hh < 10) hh = "0" + hh;
-        var mn = (date.getUTCMinutes());
-        if (mn < 10) mn = "0" + mn;
-        var ss = (date.getUTCSeconds());
-        if (ss < 10) ss = "0" + ss;
-        return yyyy+"-"+mm+"-"+dd+"T"+hh+":"+mn+":"+ss+"Z";
-    }
-
     var login = find_or_create_login(USERNAME, 'password');
     if (login) {
         var PASSWORD_HASH = decrypt_password_hash(login.password, USERNAME);
@@ -380,11 +357,7 @@ function pubmedos(doc) {
         return destroy_login(USERNAME, PASSWORD_HASH);
     });
 
-    var nonce = generate_nonce(16);
-    var created = generate_created(new Date());
-    var password_digest = b64_sha1(nonce+created+PASSWORD_HASH); // wsse password digest = Base64 (SHA1 (Nonce + Created + Password))
-
-    $.get(url_for('login'), { 'username':USERNAME, 'nonce':nonce, 'created':created, 'password_digest':password_digest }, function(response) {
+    $.get(surl_for('login'), {'username': USERNAME, 'password': PASSWORD_HASH }, function(response) {
         var prompts = Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
         .getService(Components.interfaces.nsIPromptService);
         switch (response) {
@@ -403,15 +376,14 @@ function pubmedos(doc) {
                 if (update_login(USERNAME, PASSWORD_HASH, new_password.value)) { win.location.reload(true) }
             }
             break;
-        default: // registration code
+        case 'register':
             var params = { 'inn': { 'username': USERNAME }, 'out': null };
             win.openDialog("chrome://pubmedos/content/registration_dialog.xul", "", "modal, centerscreen", params).focus();
             if (params.out) {
                 var password = params.out.password;
                 var password_hash = b64_sha1(password);
-                var encrypted_password_hash = encrypt_password_hash(password_hash, USERNAME);
-                $.post(url_for('register'),
-                       {'registration_code': response, 'last_name': params.out.last_name, 'first_name': params.out.first_name, 'middle_name': params.out.middle_name, 'affiliation': params.out.affiliation, 'password': encrypted_password_hash, 'email': params.out.email },
+                $.post(surl_for('register'),
+                       {'username': USERNAME, 'password': password_hash, 'last_name': params.out.last_name, 'first_name': params.out.first_name, 'middle_name': params.out.middle_name, 'affiliation': params.out.affiliation, 'email': params.out.email },
                        function() {
                            if (update_login(USERNAME, PASSWORD_HASH, password)) {
                                prompts.alert(win, 'PubMed On Steroids account activation', 'Your PubMed on Steroids account has been created!\n\nIn order to activate your account and verify your email address, please follow the very simple instructions that have been just sent to you via email.\n\nThank you for joining PubMed On Steroids!');
@@ -659,7 +631,7 @@ function pubmedos(doc) {
 
                 // add OS elements to page
                 $.each(articles, function(index, article) {
-                    $('#pmid_' + article.article_id, doc).find('div.PMid').siblings('div.source').append(rating_img(article) + '&nbsp;' + (article.file ? images.file + '&nbsp;' : '') + (article.favorite ? images.favorite + '&nbsp;' : '') + (article.work ? images.work + '&nbsp;' : '') + (article.read ? images.read + '&nbsp;' : '') + (article.author ? images.author : ''));
+                    $('#pmid_' + article.article_id, doc).find('div.PMid').siblings('div.source').before('<div class="source">'+rating_img(article) + '&nbsp;' + (article.file ? images.file + '&nbsp;' : '') + (article.favorite ? images.favorite + '&nbsp;' : '') + (article.work ? images.work + '&nbsp;' : '') + (article.read ? images.read + '&nbsp;' : '') + (article.author ? images.author : '')+'</div>');
                 });
             }, 'json');
         }
