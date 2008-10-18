@@ -780,7 +780,7 @@ function pubmedos(doc) {
                 $('#annotation', doc).click(function(event) {
                     var editor = '<div class="annotation" id="annotation_editor"><div class="editor_help">Type the annotation content using the <a href="http://en.wikipedia.org/wiki/BBCode" target="_new">bbcode markup</a> to format it or to insert links and images.</div><form id="annotation_form"><textarea id="edit_annotation" style="background-color: #ffff99; border: none;">'+(article.annotation ? article.annotation : '')+'</textarea><br /><input  id="save_annotation" type="submit" value="Save" />&nbsp;<input type="button" id="cancel_annotation" value="Cancel" /></form></div>';
                     $(this).after(editor).hide();
-                    win.scroll(0, event.pageY);
+                    // win.scroll(0, event.pageY); // scroll window down to annotation
                     $('#edit_annotation', doc).focus().keyup(function(e) {
                         if (e.which == 27) {
                             update_annotation_and_remove_annotation_editor(article); // pass article to revert rating
@@ -846,7 +846,7 @@ function pubmedos(doc) {
 
                 $('dd.abstract', doc).append('<div id="folders"><h2>Folders</h2><div id="select_folders">'+images.file+'&nbsp;Click here to file this article into one or more folders</div><ul id="folders_list"></ul></div>');
                 $('#select_folders', doc).click(function(event) {
-                    win.scroll(0, event.pageY);
+                    // win.scroll(0, event.pageY); // scroll window down to folders
                     win.showModalDialog(url_for('articles', pmid, 'folders', 'dialog'), win, "dialogwidth: 800; dialogheight: 600; resizable: yes; scroll: yes;");
                     $.get(url_for('articles', pmid, 'folders'), {}, function(folders) {
                         update_folders(folders);
