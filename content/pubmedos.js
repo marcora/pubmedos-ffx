@@ -10,16 +10,11 @@ function pubmedos(doc) {
     const PAGE_URL = doc.location.href;
     const REALM = 'pubmedos';
 
-    // url helpers
-    function url_for() {
-        arguments.join = Array.prototype.join;
-        return BASE_URL + '/' + arguments.join('/');
-    }
+    // CAN'T CONTINUE W/O A LOGGED IN USER!
+    if ($('#myncbi_on', doc).length == 0) return;
 
-    function surl_for() {
-        arguments.join = Array.prototype.join;
-        return SBASE_URL + '/' + arguments.join('/');
-    }
+    // scrape username if logged in
+    const USERNAME = $('#myncbi_on', doc).text().match(/Welcome (\w+)\./)[1];
 
     // init images
     var images = {
@@ -76,11 +71,179 @@ function pubmedos(doc) {
         not_reprint : '<img class="not_reprint_img" alt="[not reprint]" src="chrome://pubmedos/skin/not_reprint.png" />',
     };
 
-    // CAN'T CONTINUE W/O A LOGGED IN USER!
-    if ($('#myncbi_on', doc).length == 0) return;
+    // url helpers
+    function url_for() {
+        arguments.join = Array.prototype.join;
+        return BASE_URL + '/' + arguments.join('/');
+    }
 
-    // scrape username if logged in
-    const USERNAME = $('#myncbi_on', doc).text().match(/Welcome (\w+)\./)[1];
+    function surl_for() {
+        arguments.join = Array.prototype.join;
+        return SBASE_URL + '/' + arguments.join('/');
+    }
+
+    // notification box helper
+    var notify = {
+        info: function(label) {
+            var nbox = getBrowser().getNotificationBox();
+            nbox.appendNotification(label, null, null, nbox.PRIORITY_INFO_LOW);
+        },
+        warning: function(label) {
+            var nbox = getBrowser().getNotificationBox();
+            nbox.appendNotification(label, null, null, nbox.PRIORITY_WARNING_LOW);
+        },
+        critical: function(label) {
+            var nbox = getBrowser().getNotificationBox();
+            nbox.appendNotification(label, null, null, nbox.PRIORITY_CRITICAL_LOW);
+        },
+    };
+
+    // rating image generator
+    // alt rating scale: spam (-1), poor, below average, average, above average, excellent ???
+    function rating_img(article) {
+        if (article.rating >= 1) {
+            var img = eval('images.rtg' + article.rating + '0');
+        } else if (article.rating == -1) {
+            var img = eval('images.rtg01');
+        } else {
+            if (article.ratings_average_rating) {
+                var rem = Math.round(article.ratings_average_rating) - article.ratings_average_rating;
+                switch (true) {
+                case (rem == 0):
+                    var img = eval('images.avg' + Math.round(article.ratings_average_rating) + '0');
+                case (rem <= -0.25):
+                    var img = eval('images.avg' + Math.floor(article.ratings_average_rating) + '5');
+                case (rem < 0):
+                    var img = eval('images.avg' + Math.floor(article.ratings_average_rating) + '0');
+                case (rem <= 0.25):
+                    var img = eval('images.avg' + Math.ceil(article.ratings_average_rating) + '0');
+                case (rem > 0):
+                    var img = eval('images.avg' + Math.floor(article.ratings_average_rating) + '5');
+                }
+            } else {
+                var img = images.avg00;
+            }
+        }
+        return img; // + '&nbsp;[' + (article.ratings_average_rating ? article.ratings_average_rating.toFixed(1) + ' avg rating/' : '') + (article.ratings_count ? article.ratings_count + ' rating' + (article.ratings_count != 1 ? 's' : '') : 'unrated') + ']';
+    }
+
+    // file image generator
+    function file_img(status) {
+        if (status) {
+            return eval('images.file');
+        } else {
+            return eval('images.not_file');
+        }
+    }
+
+    // favorite image generator
+    function favorite_img(status) {
+        if (status) {
+            return eval('images.favorite');
+        } else {
+            return eval('images.not_favorite');
+        }
+    }
+
+    // work image generator
+    function work_img(status) {
+        if (status) {
+            return eval('images.work');
+        } else {
+            return eval('images.not_work');
+        }
+    }
+
+    // read image generator
+    function read_img(status) {
+        if (status) {
+            return eval('images.read');
+        } else {
+            return eval('images.not_read');
+        }
+    }
+
+    // author image generator
+    function author_img(status) {
+        if (status) {
+            return eval('images.author');
+        } else {
+            return eval('images.not_author');
+        }
+    }
+
+    // reprint image generator
+    function reprint_img(status) {
+        if (status) {
+            return eval('images.reprint');
+        } else {
+            return eval('images.not_reprint');
+        }
+    }
+
+    // discover the pdf reprint url for article with given pmid
+    function discover_pdf_url(pmid) {
+        return "http://www.pubmedcentral.nih.gov/picrender.fcgi?blobtype=pdf&pubmedid=" + pmid;
+    }
+
+    // fetch pdf reprint (and retrieve+store it if not found)
+    function fetch(pmid) {
+
+        // search for pdf
+        var pdf_url = discover_pdf_url(pmid);
+        if (!pdf_url) {
+            notify.warning('fetch error'); return
+        }
+        var service = Components.classes["@mozilla.org/network/io-service;1"]
+        .getService(Components.interfaces.nsIIOService);
+        var channel = service.newChannel(pdf_url, 0, null);
+        var stream = channel.open();
+        // check if found
+        if (channel instanceof Components.interfaces.nsIHttpChannel && channel.responseStatus != 200) {
+            notify.warning('fetch error'); return
+        }
+        // download if found
+        var pdf_stream = Components.classes["@mozilla.org/binaryinputstream;1"]
+        .createInstance(Components.interfaces.nsIBinaryInputStream);
+        pdf_stream.setInputStream(stream);
+        var size = 0;
+        var pdf = "";
+        while(size = pdf_stream.available()) {
+            pdf += pdf_stream.readBytes(size);
+        }
+        pdf_stream.close();
+        // check if pdf
+        if (!pdf.match(/^%PDF-1\.\d{1}/)) {
+            notify.warning('fetch error'); return
+        }
+        // check size of pdf
+        var max_filesize = 10*1048576; // 10 megabytes
+        if (pdf.length > max_filesize) {
+            notify.warning('fetch error'); return
+        }
+
+        // write pdf to a storage stream
+        var binary_stream = Components.classes["@mozilla.org/binaryoutputstream;1"].createInstance(Components.interfaces.nsIBinaryOutputStream);
+        var storage_stream = Components.classes["@mozilla.org/storagestream;1"].createInstance(Components.interfaces.nsIStorageStream);
+        storage_stream.init(4096, pdf.length, null);
+        binary_stream.setOutputStream(storage_stream.getOutputStream(0));
+        binary_stream.writeBytes(pdf, pdf.length);
+        binary_stream.close();
+
+        // put to gae datastore
+        var req_post = new XMLHttpRequest();
+        req_post.open("POST", url_for('articles', pmid, 'reprint'), true);
+        req_post.setRequestHeader("Content-type", "application/pdf");
+        req_post.setRequestHeader("Content-length", pdf.length);
+        req_post.onload = function(e) {
+            if (e.target.status == 200) {
+                doc.location.href= url_for('articles', pmid, 'reprint');
+            } else {
+                notify.warning('fetch error'); return
+            }
+        };
+        req_post.send(storage_stream.newInputStream(0));
+    }
 
 
     /* Base64 encode / decode <http://www.webtoolkit.info/> */
@@ -357,13 +520,113 @@ function pubmedos(doc) {
         return destroy_login(USERNAME, PASSWORD_HASH);
     });
 
+    // click user name to go to pmos account
+    (function() {
+        var $username = $('#myncbi_on td:contains("'+USERNAME+'")', doc)
+        var username_html = $username.html().replace(USERNAME, '<a title="Click to go to your PubMed On Steroids account" href="'+url_for('users', USERNAME)+'">'+USERNAME+'</a>');
+        $username.html(username_html);
+    })();
+
+    // add command tabs
+    (function () {
+        // add "Top Rated" command tab
+        $('#command_tab ul', doc).append('<li title="Click to see your top rated articles"><a id="toprated_command_tab" href="' + url_for('articles', 'toprated') + '">'+images.toprated+'</a></li>');
+
+        // add "Favorite" command tab
+        $('#command_tab ul', doc).append('<li title="Click to see your favorite articles"><a id="favorite_command_tab" href="' + url_for('articles', 'favorite') + '">'+images.favorite+'</a></li>');
+
+        // add "File" command tab
+        $('#command_tab ul', doc).append('<li title="Click to see the articles in your archive"><a id="file_command_tab" href="' + url_for('articles', 'file') + '">'+images.file+'</a></li>');
+
+        // add "Work" command tab
+        $('#command_tab ul', doc).append('<li title="Click to see the articles on your desk"><a id="work_command_tab" href="' + url_for('articles', 'work') + '">'+images.work+'</a></li>');
+
+        // add "Read" command tab
+        $('#command_tab ul', doc).append('<li title="Click to see the articles in your reading list"><a id="read_command_tab" href="'+ url_for('articles', 'read') +'">'+images.read+'</a></li>');
+
+        // add "Author" command tab
+        $('#command_tab ul', doc).append('<li title="Click to see your published articles"><a id="author_command_tab" href="'+ url_for('articles', 'author') +'">'+images.author+'</a></li>');
+
+        // add "Folder" command tab
+        $('#command_tab ul', doc).append('<li title="Click to see the articles in a specific folder"><a id="folder_command_tab" href="#">'+images.folder+'</a></li>');
+        $('#folder_command_tab', doc).click(function(){
+            win.showModalDialog(url_for('folders', 'dialog'), win, "dialogwidth: 800; dialogheight: 600; resizable: yes; scroll: yes;");
+            return false;
+        });
+
+        // add "Recommendations" command tab
+        //        $('#command_tab ul').append('<li><a id="recommendations_command_tab" href="'+ url_for('articles', 'recommended') +'">'+images.recommended+'&nbsp;Recommendations</a></li>');
+
+        // activate current command tab and add cmdtab hidden field to EntrezForm to maintain state across requests
+        if ( ! MYNCBI_CU.match(/(?:&|\?)TabCmd=(\w+)(?:&|$)/) ) {
+            var cmd_tab = /(?:&|\?)CmdTab=([\w\/+=]+)(?:&|$)/.exec(MYNCBI_CU);
+            if (cmd_tab && cmd_tab.length == 2 && $('#term', doc).val().match(/#1/)) {
+                $('#command_tab li', doc).removeClass('sel');
+                if (cmd_tab[1].match(/^Folder_(\S+)$/)) {
+                    $('#folder_command_tab', doc).parent().addClass('sel');
+                    $('#folder_command_tab', doc).html(images.folder+'&nbsp;<span style="vertical-align: top; font-weight: normal;">'+Base64.decode(/^Folder_(\S+)$/.exec(cmd_tab[1])[1])+'</span>');
+                } else {
+                    $('#'+cmd_tab[1].toLowerCase()+'_command_tab', doc).parent().addClass('sel');
+                }
+                $('#EntrezForm', doc).append('<input type="hidden" name="CmdTab" value="'+cmd_tab[1]+'"/>');
+            }
+        }
+    })();
+
+    // remove "Display Bar #2"
+    $('#display_bar2', doc).remove();
+
+    // set id of article wrapping element to pmid for ez access later on (only if display is set to "AbstractPlus")
+    var IS_ABP = false;
+    $('dl.AbstractPlusReport', doc).each(function() {
+        // "AbstractPlus" format
+        IS_ABP = true;
+        var pmid = $(this).find('.pmid:not(.pmcid)').text().match(/PMID: (\d+)\s*/)[1];
+        $(this).attr('id', 'pmid_'+pmid);
+    });
+
+    // scrape and collect pmids in an array
+    var pmids = [];
+    $('.pmid:not(.pmcid), .PMid', doc).each(function() {
+        var pmid = $(this).text().match(/PMID: (\d+)\s*/)[1];
+        pmids.push(pmid);
+    });
+
+    function preindex(pmids) {
+        // can't operate with more than one pmid if display is set to "AbstractPlus"
+        if (IS_ABP) return;
+
+        $.each(pmids, function(index, pmid) {
+            $('#pmid_' + pmid, doc).find('div.PMid').siblings('div.source').before('<div class="pmos index">'+ images.rtg00 + '&nbsp;' + images.not_favorite + '&nbsp;' + images.not_file + '&nbsp;' + images.not_work + '&nbsp;' + images.not_read + '&nbsp;' + images.not_author+'</div>');
+        });
+    }
+
+    function preshow(pmid) {
+        // if display is not set to "AbstractPlus" show index format
+        if (!IS_ABP) { index([pmid]); return }
+
+        $('#pmid_'+pmid, doc).find('div.abstitle').children('span.ti').append('<span class="pmos show">&nbsp;<span id="rating" class="rating">'+ images.rtg00 +'</span>&nbsp;<span class="favorite">'+images.not_favorite+'</span>&nbsp;<span class="file">'+images.not_file+'</span>&nbsp;<span class="work">'+images.not_work+'</span>&nbsp;<span class="read">'+images.not_read+'</span>&nbsp;<span class="author">'+images.not_author+'</span>&nbsp;<span class="reprint">'+images.not_reprint+'</span></span>');
+
+        // Add "Sponsored Links"
+        $('dd.links > h2:contains("Related Articles")', doc).parent().attr('id', 'related_articles');
+        $('#related_articles', doc).after('<dd class="links" id="sponsored_links"><h2>Sponsored Links</h2><div id="google_adsense"><iframe scrolling="no" frameborder="0" marginwidth="0" marginheight="0" width="336" height="280" src="'+url_for('articles', pmid, 'ads')+'" /></div></dd>');
+
+        // Add "Annotation"
+        $('dd.abstract', doc).append('<div class="annotation" id="annotation" style="clear: both;">&nbsp;</div>');
+    }
+
+    if (pmids.length == 1) { preshow(pmids[0]) }; // Call prep show action if only one pmid
+    if (pmids.length > 1) { preindex(pmids) }; // Call prep index action if more than one pmid
+
+    // login current user
     $.get(surl_for('login'), {'username': USERNAME, 'password': PASSWORD_HASH }, function(response) {
         var prompts = Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
         .getService(Components.interfaces.nsIPromptService);
         switch (response) {
         case 'authenticated':
             // call main if authenticated
-            main();
+            if (pmids.length == 1) { show(pmids[0]) }; // Call show action if only one pmid
+            if (pmids.length > 1) { index(pmids) }; // Call index action if more than one pmid
             break;
         case 'activate':
             // do nothing until user is activated
@@ -394,473 +657,208 @@ function pubmedos(doc) {
         }
     }, 'json');
 
-    /* main */
-    function main() {
 
-        // discover the pdf reprint url for article with given pmid
-        function discover_pdf_url(pmid) {
-            return "http://www.pubmedcentral.nih.gov/picrender.fcgi?blobtype=pdf&pubmedid=" + pmid;
-        }
+    function index(pmids) {
+        // can't operate with more than one pmid if display is set to "AbstractPlus"
+        if (IS_ABP) return;
 
-        // fetch pdf reprint (and retrieve+store it if not found)
-        function fetch(pmid) {
+        // fetch articles from OS using JSONP and add OS elements to page
+        $.get(url_for('articles'), { 'id': pmids }, function(articles) {
 
-            // search for pdf
-            var pdf_url = discover_pdf_url(pmid);
-            if (!pdf_url) {
-                alert('fetch error'); return
-            }
-            var service = Components.classes["@mozilla.org/network/io-service;1"]
-            .getService(Components.interfaces.nsIIOService);
-            var channel = service.newChannel(pdf_url, 0, null);
-            var stream = channel.open();
-            // check if found
-            if (channel instanceof Components.interfaces.nsIHttpChannel && channel.responseStatus != 200) {
-                alert('fetch error'); return
-            }
-            // download if found
-            var pdf_stream = Components.classes["@mozilla.org/binaryinputstream;1"]
-            .createInstance(Components.interfaces.nsIBinaryInputStream);
-            pdf_stream.setInputStream(stream);
-            var size = 0;
-            var pdf = "";
-            while(size = pdf_stream.available()) {
-                pdf += pdf_stream.readBytes(size);
-            }
-            pdf_stream.close();
-            // check if pdf
-            if (!pdf.match(/^%PDF-1\.\d{1}/)) {
-                alert('fetch error'); return
-            }
-            // check size of pdf
-            var max_filesize = 10*1048576; // 10 megabytes
-            if (pdf.length > max_filesize) {
-                alert('fetch error'); return
-            }
+            // can't operate unless all articles are returned by OS
+            if (articles.length != pmids.length) return;
 
-            // write pdf to a storage stream
-            var binary_stream = Components.classes["@mozilla.org/binaryoutputstream;1"].createInstance(Components.interfaces.nsIBinaryOutputStream);
-            var storage_stream = Components.classes["@mozilla.org/storagestream;1"].createInstance(Components.interfaces.nsIStorageStream);
-            storage_stream.init(4096, pdf.length, null);
-            binary_stream.setOutputStream(storage_stream.getOutputStream(0));
-            binary_stream.writeBytes(pdf, pdf.length);
-            binary_stream.close();
+            // add OS elements to page
+            $.each(articles, function(index, article) {
+                $('#pmid_' + article.article_id, doc).find('div.pmos').html('<div class="pmos index">'+rating_img(article) + '&nbsp;' + (article.favorite ? images.favorite : images.not_favorite) + '&nbsp;' + (article.file ? images.file : images.not_file) + '&nbsp;' + (article.work ? images.work : images.not_work)  + '&nbsp;' + (article.read ? images.read : images.not_read) + '&nbsp;' + (article.author ? images.author : images.not_author)+'</div>');
+            });
+        }, 'json');
+    }
 
-            // put to gae datastore
-            var req_post = new XMLHttpRequest();
-            req_post.open("POST", url_for('articles', pmid, 'reprint'), true);
-            req_post.setRequestHeader("Content-type", "application/pdf");
-            req_post.setRequestHeader("Content-length", pdf.length);
-            req_post.onload = function(e) {
-                if (e.target.status == 200) {
-                    doc.location.href= url_for('articles', pmid, 'reprint');
-                } else { alert('post fetch error\n' + e.target.responseText); return }
-            };
-            req_post.send(storage_stream.newInputStream(0));
-        }
 
-        // add command tabs
-        (function () {
-            // add "File" command tab
-            $('#command_tab ul', doc).append('<li title="Click to see the articles in your archive"><a id="file_command_tab" href="' + url_for('articles', 'file') + '">'+images.file+'</a></li>');
+    function show(pmid) {
+        // if display is not set to "AbstractPlus" show index format
+        if (!IS_ABP) { index([pmid]); return }
 
-            // add "Top Rated" command tab
-            $('#command_tab ul', doc).append('<li title="Click to see your top rated articles"><a id="toprated_command_tab" href="' + url_for('articles', 'toprated') + '">'+images.toprated+'</a></li>');
+        // remove "Featured Linkouts"
+        // $('span.featured_linkouts', doc).remove();
 
-            // add "Favorite" command tab
-            $('#command_tab ul', doc).append('<li title="Click to see your favorite articles"><a id="favorite_command_tab" href="' + url_for('articles', 'favorite') + '">'+images.favorite+'</a></li>');
+        // fetch article from OS using JSONP and add OS elements to page
+        $.get(url_for('articles', pmid), {}, function(article) {
 
-            // add "Work" command tab
-            $('#command_tab ul', doc).append('<li title="Click to see the articles on your desk"><a id="work_command_tab" href="' + url_for('articles', 'work') + '">'+images.work+'</a></li>');
+            // can't operate if requested article does not match article returned by OS
+            if (pmid != article.article_id) return;
 
-            // add "Read" command tab
-            $('#command_tab ul', doc).append('<li title="Click to see the articles in your reading list"><a id="read_command_tab" href="'+ url_for('articles', 'read') +'">'+images.read+'</a></li>');
+            // add "Rating"
+            $('#pmid_'+pmid, doc).find('div.abstitle').find('span.pmos').html('<span class="pmos show">&nbsp;<span id="rating" class="rating" title="Click to rate this article">'+rating_img(article)+'</span>&nbsp;<span class="favorite" title="Click to add/remove this article to/from your favorites">'+favorite_img(article.favorite)+'</span>&nbsp;<span class="file" title="Click to add/remove this article to/from your archive">'+file_img(article.file)+'</span>&nbsp;<span class="work" title="Click to add/remove this article to/from your desk">'+work_img(article.work)+'</span>&nbsp;<span class="read" title="Click to add/remove this article to/from your reading list">'+read_img(article.read)+'</span>&nbsp;<span class="author" title="Click to add/remove this article to/from your published articles">'+author_img(article.author)+'</span>&nbsp;<span class="reprint" title="Click to fetch the digital reprint of this article">'+reprint_img(article.reprint)+'</span>&nbsp;<span class="loading_reprint">'+images.loading_circle+'</span></span>');
+            $('span.loading_reprint', doc).hide();
+            $('#rating', doc).click(function() {
+                var editor = '<span id="rating_editor"><select id="edit_rating">' +
+                    '<option value="-1"' + (article.rating == -1 ? ' selected="selected"' : '') + '>(X) block</option>' +
+                    '<option value="0"' + (!article.rating ? ' selected="selected"' : '') + '>(0) unrated</option>' +
+                    '<option value="1"' + (article.rating == 1 ? ' selected="selected"' : '') + '>(1) mediocre</option>' +
+                    '<option value="2"' + (article.rating == 2 ? ' selected="selected"' : '') + '>(2) average</option>' +
+                    '<option value="3"' + (article.rating == 3 ? ' selected="selected"' : '') + '>(3) good</option>' +
+                    '<option value="4"' + (article.rating == 4 ? ' selected="selected"' : '') + '>(4) excellent</option>' +
+                    '<option value="5"' + (article.rating == 5 ? ' selected="selected"' : '') + '>(5) exceptional</option>' +
+                    '</select>&nbsp;<input type="button" value="Save" id="save_rating" /><input type="button" value="Cancel" id="cancel_rating" /></span>';
+                $(this).after(editor).hide();
+                $('#edit_rating', doc).focus();
+                function update_rating(rating) { article = $.merge(rating, article); $('#rating', doc).html(rating_img(article)).show(); $('#rating_editor', doc).remove() }
+                $('#save_rating', doc).click(function() {
+                    var rating = $('#edit_rating', doc).val();
+                    $.post(url_for('articles', pmid, 'rating'), { 'rating': rating }, function(rating) { update_rating(rating) }, 'json');
+                    return false
+                });
+                $('#cancel_rating', doc).click(function() {
+                    update_rating(article); // pass article to revert rating
+                    return false
+                });
+                return false
+            });
 
-            // add "Author" command tab
-            $('#command_tab ul', doc).append('<li title="Click to see the articles in your authored list"><a id="author_command_tab" href="'+ url_for('articles', 'author') +'">'+images.author+'</a></li>');
 
-            // add "Folder" command tab
-            $('#command_tab ul', doc).append('<li title="Click to see the articles in a specific folder"><a id="folder_command_tab" href="#">'+images.folder+'</a></li>');
-            $('#folder_command_tab', doc).click(function(){
-                win.showModalDialog(url_for('folders', 'dialog'), win, "dialogwidth: 800; dialogheight: 600; resizable: yes; scroll: yes;");
+            // add "File"
+            $('span.file', doc).click(function() {
+                if (article.file && !confirm('Do you really want to remove this article from your file?')) {
+                    return false;
+                }
+                $.post(url_for('articles', pmid, 'file'),
+                       {},
+                       function(status) {
+                           article.file = status;
+                           $("span.file", doc).html(file_img(status));
+                           if (status){
+                               $.get(url_for('articles', pmid, 'folders'), {}, function(folders) {
+                                   update_folders(folders);
+                               }, 'json');
+                           } else {
+                               $('#folders', doc).hide();
+                           }
+                       }, 'json');
                 return false;
             });
 
-            // add "Recommendations" command tab
-            //        $('#command_tab ul').append('<li><a id="recommendations_command_tab" href="'+ url_for('articles', 'recommended') +'">'+images.recommended+'&nbsp;Recommendations</a></li>');
+            // add "Favorite"
+            $('span.favorite', doc).click(function() {
+                $.post(url_for('articles', pmid, 'favorite'), {}, function(status) { $("span.favorite", doc).html(favorite_img(status)) }, 'json');
+                return false;
+            });
 
-            // activate current command tab and add cmdtab hidden field to EntrezForm to maintain state across requests
-            if ( ! MYNCBI_CU.match(/(?:&|\?)TabCmd=(\w+)(?:&|$)/) ) {
-                var cmd_tab = /(?:&|\?)CmdTab=([\w\/+=]+)(?:&|$)/.exec(MYNCBI_CU);
-                if (cmd_tab && cmd_tab.length == 2 && $('#term', doc).val().match(/#1/)) {
-                    $('#command_tab li', doc).removeClass('sel');
-                    if (cmd_tab[1].match(/^Folder_(\S+)$/)) {
-                        $('#folder_command_tab', doc).parent().addClass('sel');
-                        $('#folder_command_tab', doc).html(images.folder+'&nbsp;<span style="vertical-align: top; font-weight: normal;">'+Base64.decode(/^Folder_(\S+)$/.exec(cmd_tab[1])[1])+'</span>');
-                    } else {
-                        $('#'+cmd_tab[1].toLowerCase()+'_command_tab', doc).parent().addClass('sel');
-                    }
-                    $('#EntrezForm', doc).append('<input type="hidden" name="CmdTab" value="'+cmd_tab[1]+'"/>');
-                }
-            }
-        })();
+            // add "Work"
+            $('span.work', doc).click(function() {
+                $.post(url_for('articles', pmid, 'work'), {}, function(status) { $("span.work", doc).html(work_img(status)) }, 'json');
+                return false;
+            });
 
-        // remove "Display Bar #2"
-        $('#display_bar2', doc).remove();
+            // add "Read"
+            $('span.read', doc).click(function() {
+                $.post(url_for('articles', pmid, 'read'), {}, function(status) { $("span.read", doc).html(read_img(status)) }, 'json');
+                return false;
+            });
 
-        // click user name to go to pmos account
-        (function() {
-            var $username = $('#myncbi_on td:contains("'+USERNAME+'")', doc)
-            var username_html = $username.html().replace(USERNAME, '<a title="Click to go to your PubMed On Steroids account" href="'+url_for('users', USERNAME)+'">'+USERNAME+'</a>');
-            $username.html(username_html);
-        })();
+            // add "Read"
+            $('span.author', doc).click(function() {
+                $.post(url_for('articles', pmid, 'author'), {}, function(status) { $("span.author", doc).html(author_img(status)) }, 'json');
+                return false;
+            });
 
-        // set id of article wrapping element to pmid for ez access later on (only if display is set to "AbstractPlus")
-        var IS_ABP = false;
-        $('dl.AbstractPlusReport', doc).each(function() {
-            // "AbstractPlus" format
-            IS_ABP = true;
-            var pmid = $(this).find('.pmid:not(.pmcid)').text().match(/PMID: (\d+)\s*/)[1];
-            $(this).attr('id', 'pmid_'+pmid);
-        });
-
-        // scrape and collect pmids in an array
-        var pmids = [];
-        $('.pmid:not(.pmcid), .PMid', doc).each(function() {
-            var pmid = $(this).text().match(/PMID: (\d+)\s*/)[1];
-            pmids.push(pmid);
-        });
-
-        if (pmids.length == 0) { return }; // Can't operate without at least one pmid
-        if (pmids.length == 1) { show(pmids[0]) }; // Call show action if only one pmid
-        if (pmids.length > 1) { index(pmids) }; // Call index action if more than one pmid
-
-        // rating image generator
-        // alt rating scale: spam (-1), poor, below average, average, above average, excellent ???
-        function rating_img(article) {
-            if (article.rating >= 1) {
-                var img = eval('images.rtg' + article.rating + '0');
-            } else if (article.rating == -1) {
-                var img = eval('images.rtg01');
-            } else {
-                if (article.ratings_average_rating) {
-                    var rem = Math.round(article.ratings_average_rating) - article.ratings_average_rating;
-                    switch (true) {
-                    case (rem == 0):
-                        var img = eval('images.avg' + Math.round(article.ratings_average_rating) + '0');
-                    case (rem <= -0.25):
-                        var img = eval('images.avg' + Math.floor(article.ratings_average_rating) + '5');
-                    case (rem < 0):
-                        var img = eval('images.avg' + Math.floor(article.ratings_average_rating) + '0');
-                    case (rem <= 0.25):
-                        var img = eval('images.avg' + Math.ceil(article.ratings_average_rating) + '0');
-                    case (rem > 0):
-                        var img = eval('images.avg' + Math.floor(article.ratings_average_rating) + '5');
-                    }
+            // add "Reprint"
+            $('span.reprint', doc).click(function(){
+                if (article.reprint) {
+                    doc.location.href= url_for('articles', pmid, 'reprint');
                 } else {
-                    var img = images.avg00;
+                    fetch(pmid);
                 }
-            }
-            return img + '&nbsp;[' + (article.ratings_average_rating ? article.ratings_average_rating.toFixed(1) + ' avg rating/' : '') + (article.ratings_count ? article.ratings_count + ' rating' + (article.ratings_count != 1 ? 's' : '') : 'unrated') + ']';
-        }
+                return false;
+            });
 
-        // file image generator
-        function file_img(status) {
-            if (status) {
-                return eval('images.file');
-            } else {
-                return eval('images.not_file');
-            }
-        }
-
-        // favorite image generator
-        function favorite_img(status) {
-            if (status) {
-                return eval('images.favorite');
-            } else {
-                return eval('images.not_favorite');
-            }
-        }
-
-        // work image generator
-        function work_img(status) {
-            if (status) {
-                return eval('images.work');
-            } else {
-                return eval('images.not_work');
-            }
-        }
-
-        // read image generator
-        function read_img(status) {
-            if (status) {
-                return eval('images.read');
-            } else {
-                return eval('images.not_read');
-            }
-        }
-
-        // author image generator
-        function author_img(status) {
-            if (status) {
-                return eval('images.author');
-            } else {
-                return eval('images.not_author');
-            }
-        }
-
-        // reprint image generator
-        function reprint_img(status) {
-            if (status) {
-                return eval('images.reprint');
-            } else {
-                return eval('images.not_reprint');
-            }
-        }
-
-
-        function index(pmids) {
-            // can't operate with more than one pmid if display is set to "AbstractPlus"
-            if (IS_ABP) return;
-
-            // fetch articles from OS using JSONP and add OS elements to page
-            $.get(url_for('articles'), { 'id': pmids }, function(articles) {
-
-                // can't operate unless all articles are returned by OS
-                if (articles.length != pmids.length) return;
-
-                // add OS elements to page
-                $.each(articles, function(index, article) {
-                    $('#pmid_' + article.article_id, doc).find('div.PMid').siblings('div.source').before('<div class="source">'+rating_img(article) + '&nbsp;' + (article.file ? images.file + '&nbsp;' : '') + (article.favorite ? images.favorite + '&nbsp;' : '') + (article.work ? images.work + '&nbsp;' : '') + (article.read ? images.read + '&nbsp;' : '') + (article.author ? images.author : '')+'</div>');
-                });
-            }, 'json');
-        }
-
-
-        function show(pmid) {
-            // if display is not set to "AbstractPlus" show index format
-            if (!IS_ABP) { index([pmid]); return }
-
-            // remove "Featured Linkouts"
-            // $('span.featured_linkouts', doc).remove();
-
-            // fetch article from OS using JSONP and add OS elements to page
-            $.get(url_for('articles', pmid), {}, function(article) {
-
-                // can't operate if requested article does not match article returned by OS
-                if (pmid != article.article_id) return;
-
-                // add "Rating"
-                $('#pmid_'+pmid, doc).find('div.abstitle').children('span.ti').append('&nbsp;<span id="rating" class="rating" title="Click to rate this article">'+rating_img(article)+'</span>&nbsp;<span class="file" title="Click to add/remove this article to/from your archive">'+file_img(article.file)+'</span>&nbsp;<span class="favorite" title="Click to add/remove this article to/from your favorites">'+favorite_img(article.favorite)+'</span>&nbsp;<span class="work" title="Click to add/remove this article to/from your desk">'+work_img(article.work)+'</span>&nbsp;<span class="read" title="Click to add/remove this article to/from your reading list">'+read_img(article.read)+'</span>&nbsp;<span class="author" title="Click to add/remove this article to/from your authored list">'+author_img(article.author)+'</span>&nbsp;<span class="reprint" title="Click to fetch the digital reprint of this article">'+reprint_img(article.reprint)+'</span>&nbsp;<span class="loading_reprint">'+images.loading_circle+'</span>');
-                $('span.loading_reprint', doc).hide();
-                $('#rating', doc).click(function() {
-                    var editor = '<span id="rating_editor"><select id="edit_rating">' +
-                        '<option value="-1"' + (article.rating == -1 ? ' selected="selected"' : '') + '>(X) block</option>' +
-                        '<option value="0"' + (!article.rating ? ' selected="selected"' : '') + '>(0) unrated</option>' +
-                        '<option value="1"' + (article.rating == 1 ? ' selected="selected"' : '') + '>(1) mediocre</option>' +
-                        '<option value="2"' + (article.rating == 2 ? ' selected="selected"' : '') + '>(2) average</option>' +
-                        '<option value="3"' + (article.rating == 3 ? ' selected="selected"' : '') + '>(3) good</option>' +
-                        '<option value="4"' + (article.rating == 4 ? ' selected="selected"' : '') + '>(4) excellent</option>' +
-                        '<option value="5"' + (article.rating == 5 ? ' selected="selected"' : '') + '>(5) exceptional</option>' +
-                        '</select>&nbsp;<input type="button" value="Save" id="save_rating" /><input type="button" value="Cancel" id="cancel_rating" /></span>';
-                    $(this).after(editor).hide();
-                    $('#edit_rating', doc).focus();
-                    function update_rating(rating) { article = $.merge(rating, article); $('#rating', doc).html(rating_img(article)).show(); $('#rating_editor', doc).remove() }
-                    $('#save_rating', doc).click(function() {
-                        var rating = $('#edit_rating', doc).val();
-                        $.post(url_for('articles', pmid, 'rating'), { 'rating': rating }, function(rating) { update_rating(rating) }, 'json');
-                        return false
-                    });
-                    $('#cancel_rating', doc).click(function() {
-                        update_rating(article); // pass article to revert rating
-                        return false
-                    });
-                    return false
-                });
-
-
-                // add "File"
-                $('span.file', doc).click(function() {
-                    if (article.file && !confirm('Do you really want to remove this article from your file?')) {
-                        return false;
-                    }
-                    $.post(url_for('articles', pmid, 'file'),
-                          {},
-                          function(status) {
-                              article.file = status;
-                              $("span.file", doc).html(file_img(status));
-                              if (status){
-                                  $.get(url_for('articles', pmid, 'folders'), {}, function(folders) {
-                                      update_folders(folders);
-                                  }, 'json');
-                              } else {
-                                  $('#folders', doc).hide();
-                              }
-                          }, 'json');
-                    return false;
-                });
-
-                // add "Favorite"
-                $('span.favorite', doc).click(function() {
-                    $.post(url_for('articles', pmid, 'favorite'), {}, function(status) { $("span.favorite", doc).html(favorite_img(status)) }, 'json');
-                    return false;
-                });
-
-                // add "Work"
-                $('span.work', doc).click(function() {
-                    $.post(url_for('articles', pmid, 'work'), {}, function(status) { $("span.work", doc).html(work_img(status)) }, 'json');
-                    return false;
-                });
-
-                // add "Read"
-                $('span.read', doc).click(function() {
-                    $.post(url_for('articles', pmid, 'read'), {}, function(status) { $("span.read", doc).html(read_img(status)) }, 'json');
-                    return false;
-                });
-
-                // add "Read"
-                $('span.author', doc).click(function() {
-                    $.post(url_for('articles', pmid, 'author'), {}, function(status) { $("span.author", doc).html(author_img(status)) }, 'json');
-                    return false;
-                });
-
-                // add "Reprint"
-                $('span.reprint', doc).click(function(){
-                    if (article.reprint) {
-                        doc.location.href= url_for('articles', pmid, 'reprint');
-                    } else {
-                        fetch(pmid);
-                    }
-                    return false;
-                });
-
-                // add id to "Related Articles"
-                $('dd.links > h2:contains("Related Articles")', doc).parent().attr('id', 'related_articles');
-
-                /*
-                // add user related articles
-                $('dd.links:first').after('<dd class="links" id="related_links"><h2>Related Links</h2><p id="add_related_article"></p><ul class="links" id="related_articles_list"></ul></dd>');
-
-                function update_related_articles(related_articles){
-                    $('#related_articles_list').empty();
-                    $.each(related_articles, function(index, related_article){
-                        source = article_source(related_article)
-                        $('#related_articles_list').append('<li class="ovfl related_article" id="related_article_'+related_article.id+'">' +
-                                                           '<a class="pl" title="'+source+'" href="'+PM_URL+'/pubmed/'+related_article.id+'">'+related_article.title+'</a>' +
-                                                           '<span class="pub" title="'+source+'">['+source+']</span>' +
-                                                           '</li>');
-                    });
-                }
-
-                $('#add_related_article').editable(function(value, settings) {
-                    $.get(url_for('articles', pmid, 'add', 'related_article'), { 'related_pmid': value }, function(related_articles) { update_related_articles(related_articles) }, 'jsonp');
-                    return false;
-                }, {
-                    type : 'text',
-                    submit : 'OK',
-                    cancel : 'Cancel',
-                    onblur: 'ignore',
-                    width : '100%',
-                    placeholder: images.related_article_add + '&nbsp;Click here to add a link to a related article&hellip;',
-                    data : 'Enter PMID of related article...',
-                    select : true,
-                });
-                update_related_articles(article.related_articles);
-
-                */
-
-
-                // add "Sponsored Links"
-                $('#related_articles', doc).after('<dd class="links" id="sponsored_links"><h2>Sponsored Links</h2><div id="google_adsense"><iframe scrolling="no" frameborder="0" marginwidth="0" marginheight="0" width="336" height="280" src="'+url_for('articles', pmid, 'ads')+'" /></div></dd>');
-
-                // add "Annotation"
-                function update_annotation_and_remove_annotation_editor(annotation) { article = $.merge(annotation, article); $('#annotation', doc).html(article.annotation_html).show(); $('#annotation_editor', doc).remove(); $('#annotation a', doc).click(function() { doc.location.href = $(this).attr('href'); return false }) }
-                $('dd.abstract', doc).append('<div class="annotation" id="annotation" style="clear: both;">'+article.annotation_html+'</div>');
-                $('#annotation a', doc).click(function() { doc.location.href = $(this).attr('href'); return false });
-                $('#annotation', doc).click(function(event) {
-                    var editor = '<div class="annotation" id="annotation_editor"><div class="editor_help">Type the annotation content using the <a href="http://en.wikipedia.org/wiki/BBCode" target="_new">bbcode markup</a> to format it or to insert links and images.</div><form id="annotation_form"><textarea id="edit_annotation" style="background-color: #ffff99; border: none;">'+(article.annotation ? article.annotation : '')+'</textarea><br /><input  id="save_annotation" type="submit" value="Save" />&nbsp;<input type="button" id="cancel_annotation" value="Cancel" /></form></div>';
-                    $(this).after(editor).hide();
-                    // win.scroll(0, event.pageY); // scroll window down to annotation
-                    $('#edit_annotation', doc).focus().keyup(function(e) {
-                        if (e.which == 27) {
-                            update_annotation_and_remove_annotation_editor(article); // pass article to revert rating
-                            return false;
-                        }
-                    });
-                    $('#annotation_form', doc).submit(function() {
-                        var annotation = $('#edit_annotation', doc).val();
-                        $.post(url_for('articles', pmid, 'annotation'), { 'annotation': annotation }, function(annotation) { update_annotation_and_remove_annotation_editor(annotation) }, 'json');
-                        return false;
-                    });
-                    $('#cancel_annotation', doc).click(function() {
+            // add "Annotation"
+            function update_annotation_and_remove_annotation_editor(annotation) { article = $.merge(annotation, article); $('#annotation', doc).html(article.annotation_html).show(); $('#annotation_editor', doc).remove(); $('#annotation a', doc).click(function() { doc.location.href = $(this).attr('href'); return false }) }
+            $('div.annotation', doc).html(article.annotation_html);
+            $('#annotation a', doc).click(function() { doc.location.href = $(this).attr('href'); return false });
+            $('#annotation', doc).click(function(event) {
+                var editor = '<div class="annotation" id="annotation_editor"><div class="editor_help">Type the annotation content using the <a href="http://en.wikipedia.org/wiki/BBCode" target="_new">bbcode markup</a> to format it or to insert links and images.</div><form id="annotation_form"><textarea id="edit_annotation" style="background-color: #ffff99; border: none;">'+(article.annotation ? article.annotation : '')+'</textarea><br /><input  id="save_annotation" type="submit" value="Save" />&nbsp;<input type="button" id="cancel_annotation" value="Cancel" /></form></div>';
+                $(this).after(editor).hide();
+                // win.scroll(0, event.pageY); // scroll window down to annotation
+                $('#edit_annotation', doc).focus().keyup(function(e) {
+                    if (e.which == 27) {
                         update_annotation_and_remove_annotation_editor(article); // pass article to revert rating
                         return false;
-                    });
+                    }
                 });
-
-
-                // add "Folders"
-                function update_folders(folders){
-                    folders.sort(
-                        function (x,y) {
-                            return x.title > y.title;
-                        }
-                    );
-                    $('#folders', doc).show();
-                    $('#folders_list', doc).empty();
-                    $.each(folders, function(index, folder){
-                        $('#folders_list', doc).append('<li class="folder" title="Click to see all articles in this folder" id="folder_'+folder.id+'">'+images.folder+'&nbsp;<span><a href="'+url_for('folders', folder.id)+'">'+folder.title+'</a>&nbsp;<span class="folder_cmds" id="folder_'+folder.id+'_cmds"/></span></li>');
-                    });
-
-                    $('li.folder > span', doc).hover(
-                        function(){
-                            $('span.folder_cmds', this).html(images.toprated_articles_cmd+'&nbsp;'+images.favorite_articles_cmd+'&nbsp;'+images.work_articles_cmd+'&nbsp;'+images.read_articles_cmd);
-                        },
-                        function(){
-                            $('span.folder_cmds', this).empty();
-                        }
-                    );
-
-                    $('span.folder_cmds', doc).click(function(event) {
-                        var folder_id = $(this).parent().parent().attr('id').replace('folder_', '');
-                        var $target = $(event.target);
-                        switch($target.attr('class')) {
-                        case 'toprated_articles_cmd':
-                            doc.location.href = url_for('folders', folder_id);
-                            break;
-                        case 'favorite_articles_cmd':
-                            doc.location.href = url_for('folders', folder_id);
-                            break;
-                        case 'work_articles_cmd':
-                            doc.location.href = url_for('folders', folder_id);
-                            break;
-                        case 'read_articles_cmd':
-                            doc.location.href = url_for('folders', folder_id);
-                            break;
-                        }
-                        return false;
-                    });
-                }
-
-
-
-                $('dd.abstract', doc).append('<div id="folders"><h2>Folders</h2><div id="select_folders">'+images.file+'&nbsp;Click here to file this article into one or more folders</div><ul id="folders_list"></ul></div>');
-                $('#select_folders', doc).click(function(event) {
-                    // win.scroll(0, event.pageY); // scroll window down to folders
-                    win.showModalDialog(url_for('articles', pmid, 'folders', 'dialog'), win, "dialogwidth: 800; dialogheight: 600; resizable: yes; scroll: yes;");
-                    $.get(url_for('articles', pmid, 'folders'), {}, function(folders) {
-                        update_folders(folders);
-                    }, 'json');
+                $('#annotation_form', doc).submit(function() {
+                    var annotation = $('#edit_annotation', doc).val();
+                    $.post(url_for('articles', pmid, 'annotation'), { 'annotation': annotation }, function(annotation) { update_annotation_and_remove_annotation_editor(annotation) }, 'json');
                     return false;
                 });
-                if (article.file){
-                    update_folders(article.folders);
-                } else {
-                    $('#folders', doc).hide();
-                }
+                $('#cancel_annotation', doc).click(function() {
+                    update_annotation_and_remove_annotation_editor(article); // pass article to revert rating
+                    return false;
+                });
+            });
 
-                // add "Forum"
-/*
+
+            // add "Folders"
+            function update_folders(folders){
+                folders.sort(
+                    function (x,y) {
+                        return x.title > y.title;
+                    }
+                );
+                $('#folders', doc).show();
+                $('#folders_list', doc).empty();
+                $.each(folders, function(index, folder){
+                    $('#folders_list', doc).append('<li class="folder" title="Click to see all articles in this folder" id="folder_'+folder.id+'">'+images.folder+'&nbsp;<span><a href="'+url_for('folders', folder.id)+'">'+folder.title+'</a>&nbsp;<span class="folder_cmds" id="folder_'+folder.id+'_cmds"/></span></li>');
+                });
+
+                $('li.folder > span', doc).hover(
+                    function(){
+                        $('span.folder_cmds', this).html(images.toprated_articles_cmd+'&nbsp;'+images.favorite_articles_cmd+'&nbsp;'+images.work_articles_cmd+'&nbsp;'+images.read_articles_cmd);
+                    },
+                    function(){
+                        $('span.folder_cmds', this).empty();
+                    }
+                );
+
+                $('span.folder_cmds', doc).click(function(event) {
+                    var folder_id = $(this).parent().parent().attr('id').replace('folder_', '');
+                    var $target = $(event.target);
+                    switch($target.attr('class')) {
+                    case 'toprated_articles_cmd':
+                        doc.location.href = url_for('folders', folder_id);
+                        break;
+                    case 'favorite_articles_cmd':
+                        doc.location.href = url_for('folders', folder_id);
+                        break;
+                    case 'work_articles_cmd':
+                        doc.location.href = url_for('folders', folder_id);
+                        break;
+                    case 'read_articles_cmd':
+                        doc.location.href = url_for('folders', folder_id);
+                        break;
+                    }
+                    return false;
+                });
+            }
+
+            $('dd.abstract', doc).append('<div id="folders"><h2>Folders</h2><div id="select_folders">'+images.file+'&nbsp;Click here to file this article into one or more folders</div><ul id="folders_list"></ul></div>');
+            $('#select_folders', doc).click(function(event) {
+                // win.scroll(0, event.pageY); // scroll window down to folders
+                win.showModalDialog(url_for('articles', pmid, 'folders', 'dialog'), win, "dialogwidth: 800; dialogheight: 600; resizable: yes; scroll: yes;");
+                $.get(url_for('articles', pmid, 'folders'), {}, function(folders) {
+                    update_folders(folders);
+                    }, 'json');
+                return false;
+            });
+            if (article.file){
+                update_folders(article.folders);
+            } else {
+                $('#folders', doc).hide();
+            }
+
+            // add "Forum"
+            /*
                 $('dd.abstract', doc).append('<div id="discussions"><h2>Discussions</h2><p id="add_discussion"></p><ul id="discussions_list"></ul></div>');
                 function update_discussions(topics){
                     $('#discussions', doc).empty();
@@ -872,7 +870,6 @@ function pubmedos(doc) {
                 }
                update_discussions(article.topics);
 */
-            }, 'json');
-        }
+        }, 'json');
     }
-};
+}
