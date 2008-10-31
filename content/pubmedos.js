@@ -4,8 +4,8 @@ function pubmedos(doc) {
     var win = doc.defaultView; // window object associated with incoming document
     var wrp = new XPCNativeWrapper(win);
     const MYNCBI_CU = unescape(wrp.wrappedJSObject.myncbi_cu);
-    const BASE_URL = 'http://pubmedos.appspot.com'; //'http://huntington.caltech.edu';
-    const SBASE_URL = 'https://pubmedos.appspot.com'; //'http://huntington.caltech.edu';
+    const BASE_URL = 'http://pubmedos.appspot.com';
+    const SBASE_URL = 'https://pubmedos.appspot.com';
     const PUBMED_URL = 'http://'+doc.location.host;
     const PAGE_URL = doc.location.href;
     const REALM = 'pubmedos';
@@ -461,8 +461,7 @@ function pubmedos(doc) {
                 "init");
             // password is stored as a base64-sha1 hash
             var password_hash = b64_sha1(password);
-            var encrypted_password_hash = encrypt_password_hash(password_hash, username);
-            var login_info = new ns_login_info(BASE_URL, null, REALM, username, encrypted_password_hash, '', '');
+            var login_info = new ns_login_info(BASE_URL, null, REALM, username, password_hash, '', '');
             var login_manager = Components.classes["@mozilla.org/login-manager;1"].getService(Components.interfaces.nsILoginManager);
             login_manager.addLogin(login_info);
             return true;
@@ -475,8 +474,7 @@ function pubmedos(doc) {
             var ns_login_info = new Components.Constructor("@mozilla.org/login-manager/loginInfo;1",
                 Components.interfaces.nsILoginInfo,
                 "init");
-            var encrypted_password_hash = encrypt_password_hash(password_hash, username);
-            var login_info = new ns_login_info(BASE_URL, null, REALM, username, encrypted_password_hash, '', '');
+            var login_info = new ns_login_info(BASE_URL, null, REALM, username, password_hash, '', '');
             var login_manager = Components.classes["@mozilla.org/login-manager;1"].getService(Components.interfaces.nsILoginManager);
             login_manager.removeLogin(login_info);
             return true;
@@ -509,7 +507,7 @@ function pubmedos(doc) {
 
     var login = find_or_create_login(USERNAME, 'password');
     if (login) {
-        var PASSWORD_HASH = decrypt_password_hash(login.password, USERNAME);
+        var PASSWORD_HASH = login.password;
     } else {
         return // CAN'T CONTINUE W/O LOGIN!
     }
@@ -530,22 +528,22 @@ function pubmedos(doc) {
     // add command tabs
     (function () {
         // add "Top Rated" command tab
-        $('#command_tab ul', doc).append('<li title="Click to see your top rated articles"><a id="toprated_command_tab" href="' + url_for('articles', 'toprated') + '">'+images.toprated+'</a></li>');
+        $('#command_tab ul', doc).append('<li title="Click to see your top rated articles"><a id="toprated_command_tab" href="' + url_for('articles','toprated','redirect') + '">'+images.toprated+'</a></li>');
 
         // add "Favorite" command tab
-        $('#command_tab ul', doc).append('<li title="Click to see your favorite articles"><a id="favorite_command_tab" href="' + url_for('articles', 'favorite') + '">'+images.favorite+'</a></li>');
+        $('#command_tab ul', doc).append('<li title="Click to see your favorite articles"><a id="favorite_command_tab" href="' + url_for('articles','favorite','redirect') + '">'+images.favorite+'</a></li>');
 
         // add "File" command tab
-        $('#command_tab ul', doc).append('<li title="Click to see the articles in your archive"><a id="file_command_tab" href="' + url_for('articles', 'file') + '">'+images.file+'</a></li>');
+        $('#command_tab ul', doc).append('<li title="Click to see the articles in your archive"><a id="file_command_tab" href="' + url_for('articles','file','redirect') + '">'+images.file+'</a></li>');
 
         // add "Work" command tab
-        $('#command_tab ul', doc).append('<li title="Click to see the articles on your desk"><a id="work_command_tab" href="' + url_for('articles', 'work') + '">'+images.work+'</a></li>');
+        $('#command_tab ul', doc).append('<li title="Click to see the articles on your desk"><a id="work_command_tab" href="' + url_for('articles','work','redirect') + '">'+images.work+'</a></li>');
 
         // add "Read" command tab
-        $('#command_tab ul', doc).append('<li title="Click to see the articles in your reading list"><a id="read_command_tab" href="'+ url_for('articles', 'read') +'">'+images.read+'</a></li>');
+        $('#command_tab ul', doc).append('<li title="Click to see the articles in your reading list"><a id="read_command_tab" href="'+ url_for('articles','read','redirect') +'">'+images.read+'</a></li>');
 
         // add "Author" command tab
-        $('#command_tab ul', doc).append('<li title="Click to see your published articles"><a id="author_command_tab" href="'+ url_for('articles', 'author') +'">'+images.author+'</a></li>');
+        $('#command_tab ul', doc).append('<li title="Click to see your published articles"><a id="author_command_tab" href="'+ url_for('articles','author','redirect') +'">'+images.author+'</a></li>');
 
         // add "Folder" command tab
         $('#command_tab ul', doc).append('<li title="Click to see the articles in a specific folder"><a id="folder_command_tab" href="#">'+images.folder+'</a></li>');
@@ -609,7 +607,7 @@ function pubmedos(doc) {
 
         // Add "Sponsored Links"
         $('dd.links > h2:contains("Related Articles")', doc).parent().attr('id', 'related_articles');
-        $('#related_articles', doc).after('<dd class="links" id="sponsored_links"><h2>Sponsored Links</h2><div id="google_adsense"><iframe scrolling="no" frameborder="0" marginwidth="0" marginheight="0" width="336" height="280" src="'+url_for('articles', pmid, 'ads')+'" /></div></dd>');
+        $('#related_articles', doc).after('<dd class="links" id="sponsored_links"><h2>Sponsored Links</h2><div id="google_adsense"><iframe scrolling="no" frameborder="0" marginwidth="0" marginheight="0" width="336" height="280" src="'+url_for('articles', pmid, 'sponsored_links')+'" /></div></dd>');
 
         // Add "Annotation"
         $('dd.abstract', doc).append('<div class="annotation" id="annotation" style="clear: both;">&nbsp;</div>');
@@ -619,7 +617,7 @@ function pubmedos(doc) {
     if (pmids.length > 1) { preindex(pmids) }; // Call prep index action if more than one pmid
 
     // login current user
-    $.get(surl_for('login'), {'username': USERNAME, 'password': PASSWORD_HASH }, function(response) {
+    $.post(surl_for('login'), {'username': USERNAME, 'password': PASSWORD_HASH }, function(response) {
         var prompts = Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
         .getService(Components.interfaces.nsIPromptService);
         switch (response) {
@@ -646,7 +644,7 @@ function pubmedos(doc) {
                 var password = params.out.password;
                 var password_hash = b64_sha1(password);
                 $.post(surl_for('register'),
-                       {'username': USERNAME, 'password': password_hash, 'last_name': params.out.last_name, 'first_name': params.out.first_name, 'middle_name': params.out.middle_name, 'affiliation': params.out.affiliation, 'email': params.out.email },
+                       {'username': USERNAME, 'password': password_hash, 'lastname': params.out.lastname, 'forename': params.out.forename, 'email': params.out.email },
                        function() {
                            if (update_login(USERNAME, PASSWORD_HASH, password)) {
                                prompts.alert(win, 'PubMed On Steroids account activation', 'Your PubMed on Steroids account has been created!\n\nIn order to activate your account and verify your email address, please follow the very simple instructions that have been just sent to you via email.\n\nThank you for joining PubMed On Steroids!');
@@ -670,7 +668,7 @@ function pubmedos(doc) {
 
             // add OS elements to page
             $.each(articles, function(index, article) {
-                $('#pmid_' + article.article_id, doc).find('div.pmos').html('<div class="pmos index">'+rating_img(article) + '&nbsp;' + (article.favorite ? images.favorite : images.not_favorite) + '&nbsp;' + (article.file ? images.file : images.not_file) + '&nbsp;' + (article.work ? images.work : images.not_work)  + '&nbsp;' + (article.read ? images.read : images.not_read) + '&nbsp;' + (article.author ? images.author : images.not_author)+'</div>');
+                $('#pmid_' + article.id, doc).find('div.pmos').html('<div class="pmos index">'+rating_img(article) + '&nbsp;' + (article.favorite ? images.favorite : images.not_favorite) + '&nbsp;' + (article.file ? images.file : images.not_file) + '&nbsp;' + (article.work ? images.work : images.not_work)  + '&nbsp;' + (article.read ? images.read : images.not_read) + '&nbsp;' + (article.author ? images.author : images.not_author)+'</div>');
             });
         }, 'json');
     }
@@ -687,11 +685,10 @@ function pubmedos(doc) {
         $.get(url_for('articles', pmid), {}, function(article) {
 
             // can't operate if requested article does not match article returned by OS
-            if (pmid != article.article_id) return;
+            if (pmid != article.id) return;
 
             // add "Rating"
-            $('#pmid_'+pmid, doc).find('div.abstitle').find('span.pmos').html('<span class="pmos show">&nbsp;<span id="rating" class="rating" title="Click to rate this article">'+rating_img(article)+'</span>&nbsp;<span class="favorite" title="Click to add/remove this article to/from your favorites">'+favorite_img(article.favorite)+'</span>&nbsp;<span class="file" title="Click to add/remove this article to/from your archive">'+file_img(article.file)+'</span>&nbsp;<span class="work" title="Click to add/remove this article to/from your desk">'+work_img(article.work)+'</span>&nbsp;<span class="read" title="Click to add/remove this article to/from your reading list">'+read_img(article.read)+'</span>&nbsp;<span class="author" title="Click to add/remove this article to/from your published articles">'+author_img(article.author)+'</span>&nbsp;<span class="reprint" title="Click to fetch the digital reprint of this article">'+reprint_img(article.reprint)+'</span>&nbsp;<span class="loading_reprint">'+images.loading_circle+'</span></span>');
-            $('span.loading_reprint', doc).hide();
+            $('#pmid_'+pmid, doc).find('div.abstitle').find('span.pmos').html('<span class="pmos show">&nbsp;<span id="rating" class="rating" title="Click to rate this article">'+rating_img(article)+'</span>&nbsp;<span class="favorite" title="Click to add/remove this article to/from your favorites">'+favorite_img(article.favorite)+'</span>&nbsp;<span class="file" title="Click to add/remove this article to/from your archive">'+file_img(article.file)+'</span>&nbsp;<span class="work" title="Click to add/remove this article to/from your desk">'+work_img(article.work)+'</span>&nbsp;<span class="read" title="Click to add/remove this article to/from your reading list">'+read_img(article.read)+'</span>&nbsp;<span class="author" title="Click to add/remove this article to/from your published articles">'+author_img(article.author)+'</span>&nbsp;<span class="reprint" title="Click to fetch the digital reprint of this article">'+reprint_img(article.reprint)+'</span></span>');
             $('#rating', doc).click(function() {
                 var editor = '<span id="rating_editor"><select id="edit_rating">' +
                     '<option value="-1"' + (article.rating == -1 ? ' selected="selected"' : '') + '>(X) block</option>' +
@@ -707,7 +704,7 @@ function pubmedos(doc) {
                 function update_rating(rating) { article = $.merge(rating, article); $('#rating', doc).html(rating_img(article)).show(); $('#rating_editor', doc).remove() }
                 $('#save_rating', doc).click(function() {
                     var rating = $('#edit_rating', doc).val();
-                    $.post(url_for('articles', pmid, 'rating'), { 'rating': rating }, function(rating) { update_rating(rating) }, 'json');
+                    $.post(url_for('articles', pmid, 'rating'), { 'value': rating }, function(rating) { update_rating(rating) }, 'json');
                     return false
                 });
                 $('#cancel_rating', doc).click(function() {
@@ -789,7 +786,7 @@ function pubmedos(doc) {
                 });
                 $('#annotation_form', doc).submit(function() {
                     var annotation = $('#edit_annotation', doc).val();
-                    $.post(url_for('articles', pmid, 'annotation'), { 'annotation': annotation }, function(annotation) { update_annotation_and_remove_annotation_editor(annotation) }, 'json');
+                    $.post(url_for('articles', pmid, 'annotation'), { 'value': annotation }, function(annotation) { update_annotation_and_remove_annotation_editor(annotation) }, 'json');
                     return false;
                 });
                 $('#cancel_annotation', doc).click(function() {

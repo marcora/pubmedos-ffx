@@ -41,28 +41,12 @@
         <textbox id="email_confirm_input" />
       </row>
       <row>
-        <label value="Salutation" />
-        <menulist id="salutation_input">
-          <menupopup>
-            <menuitem label="" selected="true" />
-            <menuitem label="Mr" />
-            <menuitem label="Ms" />
-            <menuitem label="Dr" />
-            <menuitem label="Prof" />
-          </menupopup>
-        </menulist>
-      </row>
-      <row>
         <label value="Last Name" class="required" />
-        <textbox id="last_name_input" />
+        <textbox id="lastname_input" />
       </row>
       <row>
-        <label value="First Name" class="required" />
-        <textbox id="first_name_input" />
-      </row>
-      <row>
-        <label value="Middle Name" />
-        <textbox id="middle_name_input" />
+        <label value="Fore Name" class="required" />
+        <textbox id="forename_input" />
       </row>
       <row>
         <label value="Suffix" />
@@ -77,10 +61,6 @@
             <menuitem label="5th" />
           </menupopup>
         </menulist>
-      </row>
-      <row>
-        <label value="Affiliation" />
-        <textbox id="affiliation_input" />
       </row>
       <label value="By submitting your registration, you agree to the terms of service and privacy policy posted at &gt;http://www.pubmedos.org/terms&lt;." />
     </rows>

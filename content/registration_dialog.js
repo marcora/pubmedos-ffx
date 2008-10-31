@@ -63,8 +63,8 @@ function form_is_valid(){
          validate_required('password_confirm_input') &&
          validate_required('email_input') &&
          validate_required('email_confirm_input') &&
-         validate_required('last_name_input') &&
-         validate_required('first_name_input') &&
+         validate_required('lastname_input') &&
+         validate_required('forename_input') &&
          validate_format_email('email_input') &&
          validate_format_email('email_confirm_input')
        )
@@ -77,12 +77,9 @@ function on_dialog_accept(){
         window.arguments[0].out = {
             'password': $('#password_input').val(),
             'email': $('#email_input').val(),
-//            'salutation': $('#salutation').val(),
-            'last_name': $('#last_name_input').val(),
-            'first_name': $('#first_name_input').val(),
-            'middle_name': $('#middle_name_input').val(),
-//            'suffix': $('#suffix').val(),
-            'affiliation': $('#affiliation_input').val(),
+            'lastname': $('#lastname_input').val(),
+            'forename': $('#forename_input').val(),
+            //'suffix': $('#suffix_input').val(),
         };
         return true;
     } else { return false; }
