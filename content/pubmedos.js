@@ -3,12 +3,28 @@ function pubmedos(doc) {
     // init some vars and constants
     var win = doc.defaultView; // window object associated with incoming document
     var wrp = new XPCNativeWrapper(win);
+    var version = -1; // 0 for localhost
     const MYNCBI_CU = unescape(wrp.wrappedJSObject.myncbi_cu);
-    const BASE_URL = 'http://pubmedos.appspot.com';
-    const SBASE_URL = 'https://pubmedos.appspot.com';
+    if (version < 0) {
+        var BASE_URL = 'http://pubmedos.appspot.com';
+        var SBASE_URL = 'https://pubmedos.appspot.com';
+    } else if (version > 0) {
+        var BASE_URL = 'http://'+version+'.latest.pubmedos.appspot.com';
+        var SBASE_URL = 'https://'+version+'.latest.pubmedos.appspot.com';
+    } else {
+        var BASE_URL = 'http://localhost:4000';
+        var SBASE_URL = 'http://localhost:4000';
+    }
     const PUBMED_URL = 'http://'+doc.location.host;
     const PAGE_URL = doc.location.href;
     const REALM = 'pubmedos';
+
+    // ajax defaults
+    $.ajaxSetup({
+        cache: false,
+        dataType: 'json',
+        // error: XXX
+    });
 
     // CAN'T CONTINUE W/O A LOGGED IN USER!
     if ($('#myncbi_on', doc).length == 0) return;
@@ -48,6 +64,7 @@ function pubmedos(doc) {
         folder_del : '<img class="folder_delete_img" alt="[delete folder]" src="chrome://pubmedos/skin/folder_delete.png" />',
         folder_add : '<img class="folder_add_img" alt="[add folder]" src="chrome://pubmedos/skin/folder_add.png" />',
         folder_go : '<img class="folder_go_img" alt="[goto folders]" src="chrome://pubmedos/skin/folder_go.png" />',
+        folder_page : '<img class="folder_page_img" alt="[folder page]" src="chrome://pubmedos/skin/folder_page.png" />',
         related_article : '<img class="related_article_img" alt="[related article]" src="chrome://pubmedos/skin/related_article.png" />',
         related_article_del : '<img class="related_article_delete_img" alt="[remove related_article]" src="chrome://pubmedos/skin/related_article_delete.png" />',
         related_article_add : '<img class="related_article_add_img" alt="[add related article]" src="chrome://pubmedos/skin/related_article_add.png" />',
@@ -543,7 +560,7 @@ function pubmedos(doc) {
         $('#command_tab ul', doc).append('<li title="Click to see the articles in your reading list"><a id="read_command_tab" href="'+ url_for('articles','read','redirect') +'">'+images.read+'</a></li>');
 
         // add "Author" command tab
-        $('#command_tab ul', doc).append('<li title="Click to see your published articles"><a id="author_command_tab" href="'+ url_for('articles','author','redirect') +'">'+images.author+'</a></li>');
+        $('#command_tab ul', doc).append('<li title="Click to see your publications"><a id="author_command_tab" href="'+ url_for('articles','author','redirect') +'">'+images.author+'</a></li>');
 
         // add "Folder" command tab
         $('#command_tab ul', doc).append('<li title="Click to see the articles in a specific folder"><a id="folder_command_tab" href="#">'+images.folder+'</a></li>');
@@ -607,7 +624,7 @@ function pubmedos(doc) {
 
         // Add "Sponsored Links"
         $('dd.links > h2:contains("Related Articles")', doc).parent().attr('id', 'related_articles');
-        $('#related_articles', doc).after('<dd class="links" id="sponsored_links"><h2>Sponsored Links</h2><div id="google_adsense"><iframe scrolling="no" frameborder="0" marginwidth="0" marginheight="0" width="336" height="280" src="'+url_for('articles', pmid, 'sponsored_links')+'" /></div></dd>');
+        $('#related_articles', doc).after('<dd class="links rra" id="sponsored_links"><h2>Sponsored Links</h2><div id="google_adsense"><iframe scrolling="no" frameborder="0" marginwidth="0" marginheight="0" width="336" height="280" src="'+url_for('articles', pmid, 'sponsored_links')+'" /></div></dd>');
 
         // Add "Annotation"
         $('dd.abstract', doc).append('<div class="annotation" id="annotation" style="clear: both;">&nbsp;</div>');
@@ -688,7 +705,7 @@ function pubmedos(doc) {
             if (pmid != article.id) return;
 
             // add "Rating"
-            $('#pmid_'+pmid, doc).find('div.abstitle').find('span.pmos').html('<span class="pmos show">&nbsp;<span id="rating" class="rating" title="Click to rate this article">'+rating_img(article)+'</span>&nbsp;<span class="favorite" title="Click to add/remove this article to/from your favorites">'+favorite_img(article.favorite)+'</span>&nbsp;<span class="file" title="Click to add/remove this article to/from your archive">'+file_img(article.file)+'</span>&nbsp;<span class="work" title="Click to add/remove this article to/from your desk">'+work_img(article.work)+'</span>&nbsp;<span class="read" title="Click to add/remove this article to/from your reading list">'+read_img(article.read)+'</span>&nbsp;<span class="author" title="Click to add/remove this article to/from your published articles">'+author_img(article.author)+'</span>&nbsp;<span class="reprint" title="Click to fetch the digital reprint of this article">'+reprint_img(article.reprint)+'</span></span>');
+            $('#pmid_'+pmid, doc).find('div.abstitle').find('span.pmos').html('<span class="pmos show">&nbsp;<span id="rating" class="rating" title="Click to rate this article">'+rating_img(article)+'</span>&nbsp;<span class="favorite" title="Click to add/remove this article to/from your favorites">'+favorite_img(article.favorite)+'</span>&nbsp;<span class="file" title="Click to add/remove this article to/from your archive">'+file_img(article.file)+'</span>&nbsp;<span class="work" title="Click to add/remove this article to/from your desk">'+work_img(article.work)+'</span>&nbsp;<span class="read" title="Click to add/remove this article to/from your reading list">'+read_img(article.read)+'</span>&nbsp;<span class="author" title="Click to add/remove this article to/from your publications">'+author_img(article.author)+'</span>&nbsp;<span class="reprint" title="Click to fetch the reprint of this article">'+reprint_img(article.reprint)+'</span></span>');
             $('#rating', doc).click(function() {
                 var editor = '<span id="rating_editor"><select id="edit_rating">' +
                     '<option value="-1"' + (article.rating == -1 ? ' selected="selected"' : '') + '>(X) block</option>' +
@@ -806,7 +823,7 @@ function pubmedos(doc) {
                 $('#folders', doc).show();
                 $('#folders_list', doc).empty();
                 $.each(folders, function(index, folder){
-                    $('#folders_list', doc).append('<li class="folder" title="Click to see all articles in this folder" id="folder_'+folder.id+'">'+images.folder+'&nbsp;<span><a href="'+url_for('folders', folder.id)+'">'+folder.title+'</a>&nbsp;<span class="folder_cmds" id="folder_'+folder.id+'_cmds"/></span></li>');
+                    $('#folders_list', doc).append('<li class="folder" title="Click to see all articles in this folder" id="folder_'+folder.id+'">'+images.folder+'&nbsp;<span><a href="'+url_for('folders', folder.id, 'articles', 'redirect')+'">'+folder.title+'</a>&nbsp;<span class="folder_cmds" id="folder_'+folder.id+'_cmds"/></span></li>');
                 });
 
                 $('li.folder > span', doc).hover(
@@ -823,23 +840,23 @@ function pubmedos(doc) {
                     var $target = $(event.target);
                     switch($target.attr('class')) {
                     case 'toprated_articles_cmd':
-                        doc.location.href = url_for('folders', folder_id);
+                        doc.location.href = url_for('folders', folder_id, 'articles', 'redirect');
                         break;
                     case 'favorite_articles_cmd':
-                        doc.location.href = url_for('folders', folder_id);
+                        doc.location.href = url_for('folders', folder_id, 'articles', 'redirect');
                         break;
                     case 'work_articles_cmd':
-                        doc.location.href = url_for('folders', folder_id);
+                        doc.location.href = url_for('folders', folder_id, 'articles', 'redirect');
                         break;
                     case 'read_articles_cmd':
-                        doc.location.href = url_for('folders', folder_id);
+                        doc.location.href = url_for('folders', folder_id, 'articles', 'redirect');
                         break;
                     }
                     return false;
                 });
             }
 
-            $('dd.abstract', doc).append('<div id="folders"><h2>Folders</h2><div id="select_folders">'+images.file+'&nbsp;Click here to file this article into one or more folders</div><ul id="folders_list"></ul></div>');
+            $('dd.abstract', doc).append('<div id="folders"><h2>Folders</h2><div id="select_folders">'+images.folder_page+'&nbsp;Click here to file this article into one or more folders</div><ul id="folders_list"></ul></div>');
             $('#select_folders', doc).click(function(event) {
                 // win.scroll(0, event.pageY); // scroll window down to folders
                 win.showModalDialog(url_for('articles', pmid, 'folders', 'dialog'), win, "dialogwidth: 800; dialogheight: 600; resizable: yes; scroll: yes;");
@@ -850,6 +867,14 @@ function pubmedos(doc) {
             });
             if (article.file){
                 update_folders(article.folders);
+                // update article folders in case folders and deleted or renamed
+                $('#folder_command_tab', doc).unbind('click').click(function(){
+                    win.showModalDialog(url_for('folders', 'dialog'), win, "dialogwidth: 800; dialogheight: 600; resizable: yes; scroll: yes;");
+                    $.get(url_for('articles', pmid, 'folders'), {}, function(folders) {
+                        update_folders(folders);
+                    }, 'json');
+                    return false;
+                });
             } else {
                 $('#folders', doc).hide();
             }
