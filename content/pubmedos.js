@@ -612,7 +612,7 @@ function pubmedos(doc) {
         if (IS_ABP) return;
 
         $.each(pmids, function(index, pmid) {
-            $('#pmid_' + pmid, doc).find('div.PMid').siblings('div.source').before('<div class="pmos index">'+ images.rtg00 + '&nbsp;' + images.not_favorite + '&nbsp;' + images.not_file + '&nbsp;' + images.not_work + '&nbsp;' + images.not_read + '&nbsp;' + images.not_author+'</div>');
+            $('#pmid_' + pmid, doc).find('p.pmid').prepend('<span class="pmos index">'+ images.rtg00 + '&nbsp;' + images.not_favorite + '&nbsp;' + images.not_file + '&nbsp;' + images.not_work + '&nbsp;' + images.not_read + '&nbsp;' + images.not_author+'</span>&nbsp;');
         });
     }
 
@@ -685,7 +685,7 @@ function pubmedos(doc) {
 
             // add OS elements to page
             $.each(articles, function(index, article) {
-                $('#pmid_' + article.id, doc).find('div.pmos').html('<div class="pmos index">'+rating_img(article) + '&nbsp;' + (article.favorite ? images.favorite : images.not_favorite) + '&nbsp;' + (article.file ? images.file : images.not_file) + '&nbsp;' + (article.work ? images.work : images.not_work)  + '&nbsp;' + (article.read ? images.read : images.not_read) + '&nbsp;' + (article.author ? images.author : images.not_author)+'</div>');
+                $('#pmid_' + article.id, doc).find('span.pmos').html('<span class="pmos index">'+rating_img(article) + '&nbsp;' + (article.favorite ? images.favorite : images.not_favorite) + '&nbsp;' + (article.file ? images.file : images.not_file) + '&nbsp;' + (article.work ? images.work : images.not_work)  + '&nbsp;' + (article.read ? images.read : images.not_read) + '&nbsp;' + (article.author ? images.author : images.not_author)+'</span>');
             });
         }, 'json');
     }
